@@ -6,7 +6,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
+	//"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -566,7 +566,7 @@ func main() {
 
 		fileinfo, found := m[node.FileName]
 		if !found {
-			fmt.Printf("NO FILEINFO FOR NODE ID [%v]\n", node.Id)
+			//fmt.Printf("NO FILEINFO FOR NODE ID [%v]\n", node.Id)
 			continue
 		}
 
@@ -689,15 +689,17 @@ func main() {
 
 	}
 
-	fmt.Printf("Node count: %v\n", len(document.NodeList.GetNodes()))
+	//fmt.Printf("Node count: %v\n", len(document.NodeList.GetNodes()))
 	w := writer.New()
 	err = w.WriteStream(document, outf)
 	if err != nil {
 		log.Fatal("WRITESTREAM ERR %v\n", err)
 	}
 
-	json, _ := json.MarshalIndent(m, "", "  ")
-	fmt.Println(string(json))
+	/*
+		json, _ := json.MarshalIndent(m, "", "  ")
+		fmt.Println(string(json))
+	*/
 }
 
 func sanitize(input string) string {
