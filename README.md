@@ -12,7 +12,7 @@ The command accepts a file name or directory name and emits a json SBOM in Cyclo
 
 ### Flags
 - `-a`: (string, optional) The analyst name to use as a Person creating the SBOM.  Default:  "analyst name"
-- `-f`: (string, Required) The output format (cyclonedx or spdx).  Default:  "cyclonedx"
+- `-f`: (string, optional) The output format (cyclonedx or spdx).  Default:  "cyclonedx"
 - `-n`: (string, optional) The software name to use as the SBOM package name.  Default:  "software name"
 - `-o`:  (string, optional) Path to write the converted SBOM. Default: stdout.
 - `-v`: (string, optional) The software version to use as the SBOM package version.  Default:  "v1.0"
