@@ -321,6 +321,6 @@ Adding External node for [ADVAPI32.dll] (Import)..
 }
 ```
 
-This tool is currently at "proof-of-concept" phase and will continue to be developed by the @veramine team.  It is primarily intended at this moment to be a demonstration of the [protobom](https://github.com/bom-squad/protobom) library for SBOM generation and the [saferwall/pe](https://github.com/saferwall/pe) library for Windows file analysis.  
+This tool is currently at "proof-of-concept" phase and will continue to be developed by the [Veramine](https://veramine.com) team.  It is primarily intended at this moment to be a demonstration of the [protobom](https://github.com/bom-squad/protobom) library for SBOM generation and the [saferwall/pe](https://github.com/saferwall/pe) library for Windows file analysis.  
 
 This initial prototype also leverages the [de4dot .NET deobfuscator](https://github.com/ViRb3/de4dot-cex) to attempt to de-obfuscate any .NET binaries that appear to have been obfuscated.  This is an optional requirement.  However, having de4dot.exe available to be run will result in more accurate SBOM documents.  de4dot.exe can be run under mono in Linux and Mac OS X environments, as demonstrated in the current main.go prototype.
