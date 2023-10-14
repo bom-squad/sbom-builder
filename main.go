@@ -6,7 +6,6 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
-	//"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -690,17 +689,20 @@ func main() {
 
 	}
 
-	//fmt.Printf("Node count: %v\n", len(document.NodeList.GetNodes()))
-	w := writer.New(writer.WithFormat(formats.CDX14JSON))
-	err = w.WriteStream(document, outf)
-	if err != nil {
-		log.Fatal("WRITESTREAM ERR %v\n", err)
-	}
+	w := writer.New()
 
 	/*
-		json, _ := json.MarshalIndent(m, "", "  ")
-		fmt.Println(string(json))
+		// Write the SBOM to STDOUT in SPDX 2.3:
+		w.WriteStreamWithOptions(
+			document, os.Stdout, &writer.Options{Format: formats.SPDX23JSON},
+		)
 	*/
+
+	// Write the SBOM to STDOUT in CycloneDX 1.4:
+	w.WriteStreamWithOptions(
+		document, os.Stdout, &writer.Options{Format: formats.CDX14JSON},
+	)
+
 }
 
 func sanitize(input string) string {
