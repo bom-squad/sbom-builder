@@ -23,6 +23,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/bom-squad/protobom/pkg/formats"
 	"github.com/bom-squad/protobom/pkg/sbom"
 	"github.com/bom-squad/protobom/pkg/writer"
 	peparser "github.com/saferwall/pe"
@@ -690,7 +691,7 @@ func main() {
 	}
 
 	//fmt.Printf("Node count: %v\n", len(document.NodeList.GetNodes()))
-	w := writer.New()
+	w := writer.New(writer.WithFormat(formats.CDX14JSON))
 	err = w.WriteStream(document, outf)
 	if err != nil {
 		log.Fatal("WRITESTREAM ERR %v\n", err)
