@@ -89,12 +89,14 @@ type File struct {
 	FilesInfo map[string]FileInfo `json:"files_info,omitempty"`
 }
 
-var outputfile = flag.String("o", "", "result output filename (default: stdout)")
-var maxWorkers = flag.Int("w", 10, "max # of concurrent workers")
-var softwarename = flag.String("n", "software name", "software name")
-var analyst = flag.String("a", "analyst name", "name of analyst")
-var format = flag.String("f", "cyclonedx", "sbom format (cyclonedx or spdx)")
-var softwareversion = flag.String("v", "v1.0", "software version")
+var (
+	outputfile      = flag.String("o", "", "result output filename (default: stdout)")
+	maxWorkers      = flag.Int("w", 10, "max # of concurrent workers")
+	softwarename    = flag.String("n", "software name", "software name")
+	analyst         = flag.String("a", "analyst name", "name of analyst")
+	format          = flag.String("f", "cyclonedx", "sbom format (cyclonedx or spdx)")
+	softwareversion = flag.String("v", "v1.0", "software version")
+)
 
 func quickMzCheck(rd io.Reader) bool {
 	var mz [2]byte
@@ -339,7 +341,7 @@ func main() {
 
 	metadata_node := &sbom.Node{
 		Id:             fmt.Sprintf("%v@%v", sanitize(*softwarename), sanitize(*softwareversion)),
-		PrimaryPurpose: "APPLICATION",
+		PrimaryPurpose: []sbom.Purpose{sbom.Purpose_APPLICATION},
 		Name:           *softwarename,
 	}
 
@@ -377,11 +379,11 @@ func main() {
 
 		switch strings.ToLower(filepath.Ext(node.Name)) {
 		case ".dll", ".sys":
-			node.PrimaryPurpose = "LIBRARY"
+			node.PrimaryPurpose = []sbom.Purpose{sbom.Purpose_LIBRARY}
 		case ".exe":
-			node.PrimaryPurpose = "APPLICATION"
+			node.PrimaryPurpose = []sbom.Purpose{sbom.Purpose_APPLICATION}
 		default:
-			node.PrimaryPurpose = "FILE"
+			node.PrimaryPurpose = []sbom.Purpose{sbom.Purpose_FILE}
 		}
 
 		hashes := make(map[int32]string)
@@ -426,13 +428,13 @@ func main() {
 		if fileinfo.PeInfo != nil && fileinfo.PeInfo.SigInfo != nil {
 			if len(node.Suppliers) == 0 {
 				// didn't get CompanyName from PE header, use authenticode signature subject instead
-				//fmt.Printf("Using SIGINFO instead of CompanyName %+v\n", fileinfo.PeInfo.SigInfo)
+				// fmt.Printf("Using SIGINFO instead of CompanyName %+v\n", fileinfo.PeInfo.SigInfo)
 				node.Suppliers = append(node.Suppliers,
 					&sbom.Person{Name: fileinfo.PeInfo.SigInfo.Subject, IsOrg: true})
 			}
 
 			if len(fileinfo.PeInfo.SigInfo.Timestamp) > 0 {
-				//fmt.Printf("FOUND TIMESTAMP for [%v]: %v\n", filename, fileinfo.PeInfo.SigInfo.Timestamp)
+				// fmt.Printf("FOUND TIMESTAMP for [%v]: %v\n", filename, fileinfo.PeInfo.SigInfo.Timestamp)
 				build_date, err := time.Parse("2006-01-02 15:04:05 -0700 MST", fileinfo.PeInfo.SigInfo.Timestamp)
 				if err != nil {
 					fmt.Printf("Error parsing time [%v], err %v\n", fileinfo.PeInfo.SigInfo.Timestamp, err)
@@ -482,7 +484,6 @@ func main() {
 			}
 
 			node.Licenses = append(node.Licenses, string(content))
-
 		}
 
 		if fileinfo.HasCLR {
@@ -527,9 +528,9 @@ func main() {
 				if err != nil {
 					fmt.Println("de4dot Error:", err)
 				} else {
-					//fmt.Println(string(output))
+					// fmt.Println(string(output))
 
-					//fmt.Printf("Running processFile on clean.dat")
+					// fmt.Printf("Running processFile on clean.dat")
 					inf, err := processFile("clean.dat")
 					if err != nil {
 						fmt.Printf("Error processFile clean.dat %v\n", err)
@@ -541,7 +542,7 @@ func main() {
 			}
 
 			if fileinfo.CLRInfo.Assembly.Name != "" {
-				//fmt.Printf("ASSEMBLY NAME: [%v] NODE ID [%v]\n", fileinfo.CLRInfo.Assembly.Name, node.Id)
+				// fmt.Printf("ASSEMBLY NAME: [%v] NODE ID [%v]\n", fileinfo.CLRInfo.Assembly.Name, node.Id)
 				assembly_name_to_id_map[strings.ToLower(fileinfo.CLRInfo.Assembly.Name)] = node.Id
 			} else if fileinfo.HasCLR {
 				// no assembly name but HasCLR
@@ -566,13 +567,18 @@ func main() {
 
 		fileinfo, found := m[node.FileName]
 		if !found {
-			//fmt.Printf("NO FILEINFO FOR NODE ID [%v]\n", node.Id)
+			// fmt.Printf("NO FILEINFO FOR NODE ID [%v]\n", node.Id)
 			continue
 		}
 
 		edge := &sbom.Edge{
 			From: node.Id,
 			Type: sbom.Edge_dependsOn,
+		}
+
+		contains := &sbom.Edge{
+			From: metadata_node.Id,
+			Type: sbom.Edge_contains,
 		}
 
 		for _, ref := range fileinfo.CLRInfo.AssemblyRef {
@@ -584,27 +590,26 @@ func main() {
 			node_id, found := assembly_name_to_id_map[strings.ToLower(ref.Name)]
 			if found {
 				// this assembly is present in the package, add edge for that
-				//fmt.Printf("#%v: NODE [%v] depends on [%v] (%v)\n", index+1, node.Name, ref.Name, node_id)
+				// fmt.Printf("#%v: NODE [%v] depends on [%v] (%v)\n", index+1, node.Name, ref.Name, node_id)
 				edge.To = append(edge.To, node_id)
-
 			} else {
 				// this assmebly is not present in the package but we still want to represent the dependency
 				//  Add a node to the node list with just the filename and then add an edge pointing to that new node
 
 				fmt.Printf("Adding External node for [%v] (AssemblyRef)..\n", ref.Name)
-				//fmt.Printf("#%v: NODE [%v] depends on AssemblyRef [%v] but cant find node_id in map. Adding it..\n", index+1, node.Id, ref.Name)
+				// fmt.Printf("#%v: NODE [%v] depends on AssemblyRef [%v] but cant find node_id in map. Adding it..\n", index+1, node.Id, ref.Name)
 
 				externalnode := &sbom.Node{
 					Id:             ref.Name,
 					Name:           ref.Name,
-					PrimaryPurpose: "FILE",
+					PrimaryPurpose: []sbom.Purpose{sbom.Purpose_FILE},
 					Description:    "File not present in analyzed package.",
 				}
 				document.NodeList.AddNode(externalnode)
 
 				assembly_name_to_id_map[strings.ToLower(ref.Name)] = externalnode.Id
 				edge.To = append(edge.To, externalnode.Id)
-
+				// contains.To = append(contains.To, externalnode.Id)
 			}
 		}
 
@@ -618,7 +623,6 @@ func main() {
 			if found {
 				// this assembly is present in the package, add edge for that
 				edge.To = append(edge.To, node_id)
-
 			} else {
 
 				// try again by appending .dll to the ref.
@@ -627,56 +631,55 @@ func main() {
 				if found {
 					// this assembly is present in the package, add edge for that
 					edge.To = append(edge.To, node_id)
-
 				} else {
 
 					// this assmebly is not present in the package but we still want to represent the dependency
 					//  Add a node to the node list with just the filename and then add an edge pointing to that new node
 
-					//fmt.Printf("#%v: NODE [%v] depends on ModuleRef [%v] but cant find node_id in map. Adding it..\n", index+1, node.Id, strings.ToLower(ref))
+					// fmt.Printf("#%v: NODE [%v] depends on ModuleRef [%v] but cant find node_id in map. Adding it..\n", index+1, node.Id, strings.ToLower(ref))
 					fmt.Printf("Adding External node for [%v] (ModuleRef)..\n", ref)
 
 					externalnode := &sbom.Node{
 						Id:             ref,
 						Name:           ref,
-						PrimaryPurpose: "FILE",
+						PrimaryPurpose: []sbom.Purpose{sbom.Purpose_FILE},
 						Description:    "File not present in analyzed package.",
 					}
 					document.NodeList.AddNode(externalnode)
 
 					dll_to_id_map[strings.ToLower(ref)] = externalnode.Id
 					edge.To = append(edge.To, externalnode.Id)
+					// contains.To = append(contains.To, externalnode.Id)
+
 				}
 			}
 		}
 
 		if fileinfo.PeInfo != nil {
-
 			for _, importstruct := range fileinfo.PeInfo.Imports {
 
 				node_id, found := dll_to_id_map[strings.ToLower(importstruct.Dll)]
 				if found {
 					// this assembly is present in the package, add edge for that
 					edge.To = append(edge.To, node_id)
-
 				} else {
 					// this assmebly is not present in the package but we still want to represent the dependency
 					//  Add a node to the node list with just the filename and then add an edge pointing to that new node
 
 					fmt.Printf("Adding External node for [%v] (Import)..\n", importstruct.Dll)
-					//fmt.Printf("#%v: NODE [%v] imports PeInfo Import [%v] but cant find node_id in map. Adding it..\n", index+1, node.Id, importstruct.Dll)
+					// fmt.Printf("#%v: NODE [%v] imports PeInfo Import [%v] but cant find node_id in map. Adding it..\n", index+1, node.Id, importstruct.Dll)
 
 					externalnode := &sbom.Node{
 						Id:             importstruct.Dll,
 						Name:           importstruct.Dll,
-						PrimaryPurpose: "FILE",
+						PrimaryPurpose: []sbom.Purpose{sbom.Purpose_FILE},
 						Description:    "File not present in analyzed package. (Most likely a Microsoft binary.)",
 					}
 					document.NodeList.AddNode(externalnode)
 
 					dll_to_id_map[strings.ToLower(importstruct.Dll)] = externalnode.Id
 					edge.To = append(edge.To, externalnode.Id)
-
+					// contains.To = append(contains.To, externalnode.Id)
 				}
 			}
 		}
@@ -684,25 +687,25 @@ func main() {
 		if len(edge.To) > 0 {
 			document.NodeList.AddEdge(edge)
 		}
+		if len(contains.To) > 0 {
+			document.NodeList.AddEdge(contains)
+		}
 
-		//fmt.Printf("#%v: ASSEMBLYREFS: %+v\n", index+1, fileinfo.CLRInfo.AssemblyRef)
+		// fmt.Printf("#%v: ASSEMBLYREFS: %+v\n", index+1, fileinfo.CLRInfo.AssemblyRef)
 
 	}
 
 	w := writer.New()
 
-	/*
-		// Write the SBOM to STDOUT in SPDX 2.3:
-		w.WriteStreamWithOptions(
-			document, os.Stdout, &writer.Options{Format: formats.SPDX23JSON},
-		)
-	*/
+	// Write the SBOM to STDOUT in SPDX 2.3:
+	w.WriteStreamWithOptions(
+		document, os.Stdout, &writer.Options{Format: formats.SPDX23JSON},
+	)
 
 	// Write the SBOM to STDOUT in CycloneDX 1.4:
 	w.WriteStreamWithOptions(
 		document, os.Stdout, &writer.Options{Format: formats.CDX14JSON},
 	)
-
 }
 
 func sanitize(input string) string {
@@ -721,7 +724,6 @@ const minLengthThreshold = 32
 
 // copied from https://github.com/agnivade/levenshtein/blob/master/levenshtein.go
 func levenshtein_distance(a, b string) int {
-
 	if len(a) == 0 {
 		return utf8.RuneCountInString(b)
 	}
