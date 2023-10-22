@@ -92,6 +92,7 @@ type File struct {
 var (
 	outputfile      = flag.String("o", "", "result output filename (default: stdout)")
 	maxWorkers      = flag.Int("w", 10, "max # of concurrent workers")
+	recursive       = flag.Bool("r", true, "Walk directories recursively")
 	softwarename    = flag.String("n", "software name", "software name")
 	analyst         = flag.String("a", "analyst name", "name of analyst")
 	format          = flag.String("f", "cyclonedx", "sbom format (cyclonedx or spdx)")
@@ -128,17 +129,26 @@ func getHashInfo(rd io.Reader, hinfo *HashInfo) {
 // walkFiles starts a goroutine to walk the directory tree at root and send the
 // path of each regular file on the string channel.  It sends the result of the
 // walk on the error channel.  If done is closed, walkFiles abandons its work.
-func walkFiles(done <-chan struct{}, root string) (<-chan string, <-chan error) {
+func walkFiles(done <-chan struct{}, root string, recursive bool) (<-chan string, <-chan error) {
 	paths := make(chan string)
 	errc := make(chan error, 1)
 	go func() {
-		// Close the paths channel after Walk returns.
 		defer close(paths)
-		// No select needed for this send, since errc is buffered.
 		errc <- filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
+			// If it's a directory and we're not in recursive mode, skip it.
+			if info.IsDir() {
+				if path == root {
+					return nil
+				}
+				if !recursive {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			// Ensure we only process regular files.
 			if !info.Mode().IsRegular() {
 				return nil
 			}
@@ -277,12 +287,12 @@ func worker(done <-chan struct{}, paths <-chan string, c chan<- result) {
 	}
 }
 
-func processDir(dir string) (map[string]FileInfo, error) {
+func processDir(dir string, recursive bool) (map[string]FileInfo, error) {
 	done := make(chan struct{})
 	defer close(done)
 
 	dir = filepath.Clean(dir)
-	paths, errc := walkFiles(done, dir)
+	paths, errc := walkFiles(done, dir, recursive)
 	c := make(chan result)
 	var wg sync.WaitGroup
 	wg.Add(*maxWorkers)
@@ -361,7 +371,7 @@ func main() {
 		}
 		if finfo.Mode().IsDir() {
 			tm := make(map[string]FileInfo)
-			tm, _ = processDir(arg)
+			tm, _ = processDir(arg, *recursive)
 			maps.Copy(m, tm)
 		}
 	}
