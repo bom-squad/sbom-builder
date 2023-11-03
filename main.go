@@ -97,6 +97,7 @@ var (
 	analyst         = flag.String("a", "analyst name", "name of analyst")
 	format          = flag.String("f", "cyclonedx", "sbom format (cyclonedx or spdx)")
 	softwareversion = flag.String("v", "v1.0", "software version")
+	help            = flag.Bool("h", false, "show usage/help message")
 )
 
 func quickMzCheck(rd io.Reader) bool {
@@ -327,7 +328,8 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
-	if len(flag.Args()) == 0 {
+
+	if len(flag.Args()) == 0 || *help {
 		flag.Usage()
 		return
 	}
@@ -707,15 +709,17 @@ func main() {
 
 	w := writer.New()
 
-	// Write the SBOM to STDOUT in SPDX 2.3:
-	w.WriteStreamWithOptions(
-		document, os.Stdout, &writer.Options{Format: formats.SPDX23JSON},
-	)
-
 	// Write the SBOM to STDOUT in CycloneDX 1.4:
-	w.WriteStreamWithOptions(
-		document, os.Stdout, &writer.Options{Format: formats.CDX14JSON},
-	)
+	if *format == "cyclonedx" {
+		w.WriteStreamWithOptions(
+			document, os.Stdout, &writer.Options{Format: formats.CDX14JSON},
+		)
+	} else if *format == "spdx" {
+		// Write the SBOM to STDOUT in SPDX 2.3:
+		w.WriteStreamWithOptions(
+			document, os.Stdout, &writer.Options{Format: formats.SPDX23JSON},
+		)
+	}
 }
 
 func sanitize(input string) string {
